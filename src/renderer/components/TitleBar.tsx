@@ -47,7 +47,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-export default function TitleBar() {
+export default function TitleBar({ onProjectAdded }: { onProjectAdded?: (id: number) => void }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [currentId, setCurrentId] = useState<number | null>(null);
 
@@ -60,6 +60,7 @@ export default function TitleBar() {
     if (project) {
       setProjects(prev => [...prev, project]);
       setCurrentId(project.id);
+      onProjectAdded?.(project.id);
     }
   };
 

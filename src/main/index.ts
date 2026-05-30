@@ -179,6 +179,11 @@ app.whenReady().then(async () => {
   createWindow();
   ipcHandlers = new IpcHandlers(db, mainWindow!);
 
+  // Start monitoring when a project is added
+  ipcHandlers.setOnProjectAdded(async (id, projectPath) => {
+    await startMonitoring(projectPath, id);
+  });
+
   // Auto-start monitoring for the last active project
   const projects = db.getProjects();
   if (projects.length > 0) {

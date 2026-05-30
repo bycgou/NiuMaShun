@@ -8,11 +8,16 @@ export default class IpcHandlers {
   private currentProjectId: number | null = null;
   private currentGranularity: Granularity = 'event';
   private mainWindow: BrowserWindow;
+  private onProjectAdded: ((id: number, path: string) => void) | null = null;
 
   constructor(db: Database, mainWindow: BrowserWindow) {
     this.db = db;
     this.mainWindow = mainWindow;
     this.registerHandlers();
+  }
+
+  setOnProjectAdded(callback: (id: number, path: string) => void): void {
+    this.onProjectAdded = callback;
   }
 
   private registerHandlers(): void {
@@ -32,6 +37,8 @@ export default class IpcHandlers {
       try {
         const id = this.db.addProject(name, projectPath);
         this.currentProjectId = id;
+        // Notify main process to start monitoring
+        this.onProjectAdded?.(id, projectPath);
         return { id, name, path: projectPath };
       } catch {
         return null;

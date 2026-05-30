@@ -64,13 +64,18 @@ export default function App() {
     setGranularity(g);
   };
 
+  const handleProjectAdded = (id: number) => {
+    setHasProjects(true);
+    handleProjectSwitch(id);
+  };
+
   if (!hasProjects) {
-    return <StartupScreen onProjectAdded={handleProjectSwitch} />;
+    return <StartupScreen onProjectAdded={handleProjectAdded} />;
   }
 
   return (
     <>
-      <TitleBar />
+      <TitleBar onProjectAdded={handleProjectAdded} />
       <TickerBar projectId={projectId} />
       <IntervalBar
         current={granularity}
