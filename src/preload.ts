@@ -46,6 +46,9 @@ const api = {
   ticker: {
     get: (projectId: number) => ipcRenderer.invoke(IPC_CHANNELS.TICKER_GET, projectId),
   },
+  fileTree: {
+    get: (projectId: number) => ipcRenderer.invoke(IPC_CHANNELS.FILE_TREE_GET, projectId),
+  },
   tokenRanking: {
     get: (projectId: number) => ipcRenderer.invoke(IPC_CHANNELS.TOKEN_RANKING_GET, projectId),
   },

@@ -31,16 +31,18 @@ export default function App() {
 
   const refreshData = useCallback(async () => {
     if (!projectId) return;
-    const [klines, evts, tokens, stats] = await Promise.all([
+    const [klines, evts, tokens, stats, tree] = await Promise.all([
       window.api.kline.get(projectId, granularity),
       window.api.events.get(projectId),
       window.api.tokenRanking.get(projectId),
       window.api.dailyStats.get(projectId),
+      window.api.fileTree.get(projectId),
     ]);
     setKlineData(klines);
     setEvents(evts);
     setTokenRanking(tokens);
     setDailyStats(stats);
+    setFileTree(tree);
   }, [projectId, granularity]);
 
   useEffect(() => {

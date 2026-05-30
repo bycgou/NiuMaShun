@@ -1,7 +1,10 @@
 import { ipcMain, BrowserWindow, dialog } from 'electron';
+import fs from 'fs';
+import path from 'path';
 import Database from './database';
 import { IPC_CHANNELS } from '../shared/ipc-channels';
-import { Granularity } from '../shared/types';
+import { Granularity, FileTreeNode } from '../shared/types';
+import { EXCLUDED_DIRS } from '../shared/constants';
 
 export default class IpcHandlers {
   private db: Database;
@@ -101,6 +104,55 @@ export default class IpcHandlers {
     ipcMain.handle(IPC_CHANNELS.WINDOW_CLOSE, () => {
       this.mainWindow.close();
     });
+
+    ipcMain.handle(IPC_CHANNELS.FILE_TREE_GET, (_event, projectId: number) => {
+      const project = this.db.getProject(projectId);
+      if (!project) return [];
+      return this.scanFileTree(project.path);
+    });
+  }
+
+  private scanFileTree(dirPath: string, relativePath = ''): FileTreeNode[] {
+    const nodes: FileTreeNode[] = [];
+    try {
+      const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+      // Sort: directories first, then files
+      const sorted = entries.sort((a, b) => {
+        if (a.isDirectory() && !b.isDirectory()) return -1;
+        if (!a.isDirectory() && b.isDirectory()) return 1;
+        return a.name.localeCompare(b.name);
+      });
+
+      for (const entry of sorted) {
+        // Skip excluded directories
+        if (EXCLUDED_DIRS.includes(entry.name)) continue;
+        // Skip hidden files/dirs (starting with .)
+        if (entry.name.startsWith('.')) continue;
+
+        const entryRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+
+        if (entry.isDirectory()) {
+          const children = this.scanFileTree(path.join(dirPath, entry.name), entryRelativePath);
+          if (children.length > 0) {
+            nodes.push({
+              name: entry.name,
+              path: entryRelativePath,
+              type: 'directory',
+              children,
+            });
+          }
+        } else {
+          nodes.push({
+            name: entry.name,
+            path: entryRelativePath,
+            type: 'file',
+          });
+        }
+      }
+    } catch {
+      // Ignore permission errors
+    }
+    return nodes;
   }
 
   getCurrentProjectId(): number | null {
