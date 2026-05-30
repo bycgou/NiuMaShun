@@ -47,7 +47,13 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-export default function TitleBar({ onProjectAdded }: { onProjectAdded?: (id: number) => void }) {
+export default function TitleBar({
+  onProjectAdded,
+  onProjectSwitch
+}: {
+  onProjectAdded?: (id: number) => void;
+  onProjectSwitch?: (id: number) => void;
+}) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [currentId, setCurrentId] = useState<number | null>(null);
 
@@ -67,6 +73,7 @@ export default function TitleBar({ onProjectAdded }: { onProjectAdded?: (id: num
   const handleSwitch = async (id: number) => {
     await window.api.project.switch(id);
     setCurrentId(id);
+    onProjectSwitch?.(id);
   };
 
   return (

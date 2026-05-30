@@ -77,7 +77,7 @@ export default function App() {
 
   return (
     <>
-      <TitleBar onProjectAdded={handleProjectAdded} />
+      <TitleBar onProjectAdded={handleProjectAdded} onProjectSwitch={handleProjectSwitch} />
       <TickerBar projectId={projectId} />
       <IntervalBar
         current={granularity}

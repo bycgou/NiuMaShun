@@ -108,14 +108,9 @@ async function handleFileChange(event: FileChangeEvent, projectId: number): Prom
 
   const isCreate = event.type === 'add';
   const isDelete = event.type === 'unlink';
-  let linesAdded = 0;
-  let linesDeleted = 0;
-
-  if (!isCreate && !isDelete && event.type === 'change') {
-    const diff = await state.gitEngine.getDiffForFile(event.filePath);
-    linesAdded = diff.added;
-    linesDeleted = diff.removed;
-  }
+  // Use line counts from FileWatcher (content-based comparison)
+  const linesAdded = event.linesAdded;
+  const linesDeleted = event.linesDeleted;
 
   const scoreDelta = state.score.apply(linesAdded, linesDeleted, isCreate, isDelete);
 
