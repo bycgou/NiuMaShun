@@ -15,4 +15,8 @@ export default defineConfig({
       '@shared': path.resolve(__dirname, 'src/shared'),
     },
   },
+  test: {
+    root: path.resolve(__dirname),
+    include: ['tests/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+  },
 });
