@@ -1,0 +1,13 @@
+appId: com.claude-code-tracker
+productName: Claude Code Tracker
+directories:
+  output: release
+files:
+  - dist/**/*
+  - package.json
+mac:
+  category: public.app-category.developer-tools
+win:
+  target: nsis
+linux:
+  target: AppImage
