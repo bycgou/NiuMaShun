@@ -1,9 +1,10 @@
 import BetterSqlite3 from 'better-sqlite3';
-import { KlineData, EventRecord, TickerData, Granularity } from '../shared/types';
+import { KlineData, EventRecord, FileStock, Granularity } from '../shared/types';
 
 interface KlineRow {
   id: number;
   project_id: number;
+  file_path: string;
   timestamp: string;
   granularity: string;
   open_score: number;
@@ -14,8 +15,8 @@ interface KlineRow {
   close_loc: number;
   volume: number;
   tokens: number;
-  files_created: number;
-  files_deleted: number;
+  lines_added: number;
+  lines_deleted: number;
 }
 
 interface EventRow {
@@ -51,9 +52,11 @@ export default class Database {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- 每个文件独立的 K 线数据
       CREATE TABLE IF NOT EXISTS kline (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         project_id INTEGER REFERENCES projects(id),
+        file_path TEXT NOT NULL,
         timestamp DATETIME NOT NULL,
         granularity TEXT NOT NULL,
         open_score REAL NOT NULL,
@@ -64,9 +67,9 @@ export default class Database {
         close_loc INTEGER NOT NULL,
         volume INTEGER DEFAULT 0,
         tokens INTEGER DEFAULT 0,
-        files_created INTEGER DEFAULT 0,
-        files_deleted INTEGER DEFAULT 0,
-        UNIQUE(project_id, timestamp, granularity)
+        lines_added INTEGER DEFAULT 0,
+        lines_deleted INTEGER DEFAULT 0,
+        UNIQUE(project_id, file_path, timestamp, granularity)
       );
 
       CREATE TABLE IF NOT EXISTS events (
@@ -135,10 +138,9 @@ export default class Database {
   }
 
   getProject(id: number): { id: number; name: string; path: string; isGitRepo: number; createdAt: string } | undefined {
-    const row = this.db.prepare(
+    return this.db.prepare(
       'SELECT id, name, path, is_git_repo as isGitRepo, created_at as createdAt FROM projects WHERE id = ?'
     ).get(id) as any;
-    return row;
   }
 
   getProjects(): { id: number; name: string; path: string; isGitRepo: number; createdAt: string }[] {
@@ -151,10 +153,11 @@ export default class Database {
     this.db.prepare('DELETE FROM projects WHERE id = ?').run(id);
   }
 
-  // --- Kline operations ---
+  // --- Kline operations (per-file) ---
 
   upsertKline(data: {
     projectId: number;
+    filePath: string;
     timestamp: string;
     granularity: Granularity;
     openScore: number;
@@ -165,40 +168,121 @@ export default class Database {
     closeLoc: number;
     volume: number;
     tokens: number;
-    filesCreated: number;
-    filesDeleted: number;
+    linesAdded: number;
+    linesDeleted: number;
   }): void {
     this.db.prepare(`
-      INSERT INTO kline (project_id, timestamp, granularity, open_score, close_score, high_score, low_score, open_loc, close_loc, volume, tokens, files_created, files_deleted)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(project_id, timestamp, granularity) DO UPDATE SET
+      INSERT INTO kline (project_id, file_path, timestamp, granularity, open_score, close_score, high_score, low_score, open_loc, close_loc, volume, tokens, lines_added, lines_deleted)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(project_id, file_path, timestamp, granularity) DO UPDATE SET
         close_score = excluded.close_score,
         high_score = MAX(kline.high_score, excluded.high_score),
         low_score = MIN(kline.low_score, excluded.low_score),
         close_loc = excluded.close_loc,
         volume = kline.volume + excluded.volume,
         tokens = kline.tokens + excluded.tokens,
-        files_created = kline.files_created + excluded.files_created,
-        files_deleted = kline.files_deleted + excluded.files_deleted
+        lines_added = kline.lines_added + excluded.lines_added,
+        lines_deleted = kline.lines_deleted + excluded.lines_deleted
     `).run(
-      data.projectId, data.timestamp, data.granularity,
+      data.projectId, data.filePath, data.timestamp, data.granularity,
       data.openScore, data.closeScore, data.highScore, data.lowScore,
       data.openLoc, data.closeLoc, data.volume, data.tokens,
-      data.filesCreated, data.filesDeleted
+      data.linesAdded, data.linesDeleted
     );
   }
 
-  getKlines(projectId: number, granularity: Granularity, limit = 500): KlineData[] {
+  // 获取某个文件的 K 线数据
+  getFileKlines(projectId: number, filePath: string, granularity: Granularity, limit = 500): KlineData[] {
     const rows = this.db.prepare(
-      'SELECT * FROM kline WHERE project_id = ? AND granularity = ? ORDER BY timestamp DESC LIMIT ?'
-    ).all(projectId, granularity, limit) as KlineRow[];
+      'SELECT * FROM kline WHERE project_id = ? AND file_path = ? AND granularity = ? ORDER BY timestamp DESC LIMIT ?'
+    ).all(projectId, filePath, granularity, limit) as KlineRow[];
     return rows.map(this.rowToKline);
+  }
+
+  // 获取所有文件的股票列表
+  getFileStocks(projectId: number): FileStock[] {
+    // 获取每个文件的最新 K 线数据和统计信息
+    const rows = this.db.prepare(`
+      WITH file_stats AS (
+        SELECT
+          file_path,
+          COUNT(*) as edit_count,
+          SUM(lines_added) as total_added,
+          SUM(lines_deleted) as total_deleted,
+          MAX(timestamp) as last_edit_time
+        FROM events
+        WHERE project_id = ?
+        GROUP BY file_path
+      ),
+      latest_kline AS (
+        SELECT DISTINCT
+          file_path,
+          FIRST_VALUE(close_loc) OVER (PARTITION BY file_path ORDER BY timestamp DESC) as current_lines,
+          FIRST_VALUE(open_loc) OVER (PARTITION BY file_path ORDER BY timestamp ASC) as open_lines
+        FROM kline
+        WHERE project_id = ? AND granularity = 'event'
+      )
+      SELECT
+        e.file_path as filePath,
+        e.edit_count as editCount,
+        e.total_added as totalAdded,
+        e.total_deleted as totalDeleted,
+        e.last_edit_time as lastEditTime,
+        COALESCE(k.current_lines, 0) as currentLines,
+        COALESCE(k.open_lines, 0) as openLines
+      FROM file_stats e
+      LEFT JOIN latest_kline k ON e.file_path = k.file_path
+      ORDER BY e.last_edit_time DESC
+    `).all(projectId, projectId) as any[];
+
+    return rows.map(row => {
+      const currentLines = row.currentLines || 0;
+      const openLines = row.openLines || 0;
+      const changeAbsolute = currentLines - openLines;
+      const changePercent = openLines > 0 ? (changeAbsolute / openLines) * 100 : 0;
+
+      // 判断状态
+      let status: 'active' | 'ipo' | 'delisted' | 'hot' = 'active';
+      const recentEvents = this.db.prepare(
+        "SELECT COUNT(*) as cnt FROM events WHERE project_id = ? AND file_path = ? AND timestamp > datetime('now', '-5 minutes')"
+      ).get(projectId, row.filePath) as { cnt: number };
+
+      if (row.editCount <= 1) status = 'ipo';
+      if (recentEvents.cnt >= 5) status = 'hot';
+
+      // 检查文件是否还存在（需要在主进程中检查）
+      const lastEvent = this.db.prepare(
+        "SELECT file_deleted FROM events WHERE project_id = ? AND file_path = ? ORDER BY timestamp DESC LIMIT 1"
+      ).get(projectId, row.filePath) as { file_deleted: number } | undefined;
+
+      if (lastEvent?.file_deleted) status = 'delisted';
+
+      return {
+        filePath: row.filePath,
+        fileName: row.filePath.split('/').pop() || row.filePath,
+        currentLines,
+        openLines,
+        changePercent,
+        changeAbsolute,
+        editCount: row.editCount,
+        status,
+        lastEditTime: row.lastEditTime,
+        tokens: 0, // TODO: 从 token 表获取
+      };
+    });
+  }
+
+  // 获取单个文件的股票信息
+  getFileStock(projectId: number, filePath: string): FileStock | null {
+    const stocks = this.getFileStocks(projectId);
+    return stocks.find(s => s.filePath === filePath) || null;
   }
 
   private rowToKline(row: KlineRow): KlineData {
     return {
       id: row.id,
       projectId: row.project_id,
+      filePath: row.file_path,
       timestamp: row.timestamp,
       granularity: row.granularity as Granularity,
       openScore: row.open_score,
@@ -209,8 +293,8 @@ export default class Database {
       closeLoc: row.close_loc,
       volume: row.volume,
       tokens: row.tokens,
-      filesCreated: row.files_created,
-      filesDeleted: row.files_deleted,
+      linesAdded: row.lines_added,
+      linesDeleted: row.lines_deleted,
     };
   }
 
@@ -293,41 +377,6 @@ export default class Database {
       ORDER BY tokens DESC
       LIMIT ?
     `).all(projectId, limit) as any[];
-  }
-
-  // --- Ticker operations ---
-
-  getTickerData(projectId: number): TickerData {
-    const current = this.db.prepare(
-      'SELECT close_score FROM kline WHERE project_id = ? AND granularity = ? ORDER BY timestamp DESC LIMIT 1'
-    ).get(projectId, 'event') as { close_score: number } | undefined;
-
-    const ath = this.db.prepare(
-      'SELECT MAX(close_score) as val FROM kline WHERE project_id = ?'
-    ).get(projectId) as { val: number | null };
-
-    const atl = this.db.prepare(
-      'SELECT MIN(close_score) as val FROM kline WHERE project_id = ?'
-    ).get(projectId) as { val: number | null };
-
-    const vol = this.db.prepare(
-      "SELECT COALESCE(SUM(volume), 0) as val FROM kline WHERE project_id = ? AND timestamp > datetime('now', '-24 hours')"
-    ).get(projectId) as { val: number };
-
-    const activeFiles = this.db.prepare(
-      'SELECT COUNT(DISTINCT file_path) as val FROM events WHERE project_id = ?'
-    ).get(projectId) as { val: number };
-
-    return {
-      currentScore: current?.close_score ?? 10000,
-      changePercent: 0,
-      changeAbsolute: 0,
-      ath: ath.val ?? 10000,
-      atl: atl.val ?? 10000,
-      volume24h: vol.val,
-      activeFiles: activeFiles.val,
-      connectionStatus: 'connected',
-    };
   }
 
   // --- Daily summary ---

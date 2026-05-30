@@ -12,6 +12,7 @@ export interface Project {
 export interface KlineData {
   id: number;
   projectId: number;
+  filePath: string;  // 每个文件独立的 K 线
   timestamp: string;
   granularity: Granularity;
   openScore: number;
@@ -22,8 +23,22 @@ export interface KlineData {
   closeLoc: number;
   volume: number;
   tokens: number;
-  filesCreated: number;
-  filesDeleted: number;
+  linesAdded: number;
+  linesDeleted: number;
+}
+
+// 文件股票信息
+export interface FileStock {
+  filePath: string;
+  fileName: string;
+  currentLines: number;
+  openLines: number;       // IPO 时的行数
+  changePercent: number;   // 涨跌幅
+  changeAbsolute: number;  // 涨跌绝对值
+  editCount: number;       // 编辑次数
+  status: StatusBadge;     // active | ipo | delisted | hot
+  lastEditTime: string;
+  tokens: number;          // 该文件消耗的 token
 }
 
 export interface EventRecord {

@@ -61,16 +61,8 @@ export default class IpcHandlers {
       }
     });
 
-    ipcMain.handle(IPC_CHANNELS.KLINE_GET, (_event, projectId: number, granularity: Granularity) => {
-      return this.db.getKlines(projectId, granularity);
-    });
-
     ipcMain.handle(IPC_CHANNELS.EVENTS_GET, (_event, projectId: number, limit: number) => {
       return this.db.getRecentEvents(projectId, limit || 50);
-    });
-
-    ipcMain.handle(IPC_CHANNELS.TICKER_GET, (_event, projectId: number) => {
-      return this.db.getTickerData(projectId);
     });
 
     ipcMain.handle(IPC_CHANNELS.TOKEN_RANKING_GET, (_event, projectId: number) => {
@@ -109,6 +101,21 @@ export default class IpcHandlers {
       const project = this.db.getProject(projectId);
       if (!project) return [];
       return this.scanFileTree(project.path);
+    });
+
+    // 获取文件股票列表
+    ipcMain.handle('stocks:get', (_event, projectId: number) => {
+      return this.db.getFileStocks(projectId);
+    });
+
+    // 获取单个文件的 K 线数据
+    ipcMain.handle('kline:file:get', (_event, projectId: number, filePath: string, granularity: Granularity) => {
+      return this.db.getFileKlines(projectId, filePath, granularity);
+    });
+
+    // 获取单个文件的股票信息
+    ipcMain.handle('stock:file:get', (_event, projectId: number, filePath: string) => {
+      return this.db.getFileStock(projectId, filePath);
     });
   }
 

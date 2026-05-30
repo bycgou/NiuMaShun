@@ -1,15 +1,5 @@
-import React, { useState, useEffect } from 'react';
-
-interface TickerData {
-  currentScore: number;
-  changePercent: number;
-  changeAbsolute: number;
-  ath: number;
-  atl: number;
-  volume24h: number;
-  activeFiles: number;
-  connectionStatus: string;
-}
+import React from 'react';
+import { FileStock } from '../../shared/types';
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -20,6 +10,29 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'var(--bg-secondary)',
     borderBottom: '1px solid var(--border)',
   },
+  fileInfo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+  },
+  fileName: {
+    fontSize: 16,
+    fontWeight: 700,
+    color: 'var(--text-primary)',
+  },
+  filePath: {
+    fontSize: 11,
+    color: 'var(--text-secondary)',
+    maxWidth: 300,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  priceSection: {
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: 8,
+  },
   price: {
     fontSize: 24,
     fontWeight: 700,
@@ -27,6 +40,15 @@ const styles: Record<string, React.CSSProperties> = {
   change: {
     fontSize: 14,
     fontWeight: 600,
+  },
+  divider: {
+    width: 1,
+    height: 30,
+    background: 'var(--border)',
+  },
+  stats: {
+    display: 'flex',
+    gap: 16,
   },
   stat: {
     display: 'flex',
@@ -44,63 +66,88 @@ const styles: Record<string, React.CSSProperties> = {
   },
   status: {
     marginLeft: 'auto',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 4,
+    padding: '4px 8px',
+    borderRadius: 4,
     fontSize: 11,
-    color: 'var(--text-secondary)',
+    fontWeight: 600,
   },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: '50%',
+  noSelection: {
+    flex: 1,
+    textAlign: 'center',
+    color: 'var(--text-secondary)',
+    fontSize: 13,
   },
 };
 
-export default function TickerBar({ projectId }: { projectId: number | null }) {
-  const [data, setData] = useState<TickerData | null>(null);
+const STATUS_STYLES: Record<string, { background: string; color: string }> = {
+  ipo: { background: 'var(--accent-green)', color: '#fff' },
+  delisted: { background: 'var(--accent-red)', color: '#fff' },
+  hot: { background: 'var(--accent-yellow)', color: '#000' },
+  active: { background: 'transparent', color: 'var(--text-secondary)' },
+};
 
-  useEffect(() => {
-    if (!projectId) return;
-    window.api.ticker.get(projectId).then(setData);
-    window.api.onUpdate('ticker:update', setData);
-  }, [projectId]);
+export default function TickerBar({ stock }: { stock: FileStock | null }) {
+  if (!stock) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.noSelection}>← 选择一个文件查看行情</div>
+      </div>
+    );
+  }
 
-  if (!data) return <div style={styles.container}>等待项目选择...</div>;
-
-  const isPositive = data.changeAbsolute >= 0;
+  const isPositive = stock.changeAbsolute >= 0;
   const color = isPositive ? 'var(--accent-green)' : 'var(--accent-red)';
+  const arrow = isPositive ? '▲' : stock.changeAbsolute < 0 ? '▼' : '─';
+  const statusStyle = STATUS_STYLES[stock.status] || STATUS_STYLES.active;
 
   return (
     <div style={styles.container}>
-      <div>
-        <div style={{ ...styles.price, color }}>
-          {data.currentScore.toLocaleString()}
+      <div style={styles.fileInfo}>
+        <span style={styles.fileName}>{stock.fileName}</span>
+        <span style={styles.filePath}>{stock.filePath}</span>
+      </div>
+
+      <div style={styles.divider} />
+
+      <div style={styles.priceSection}>
+        <span style={{ ...styles.price, color }}>
+          {stock.currentLines}
+        </span>
+        <span style={{ ...styles.change, color }}>
+          {arrow} {Math.abs(stock.changeAbsolute).toFixed(1)} ({isPositive ? '+' : ''}{stock.changePercent.toFixed(2)}%)
+        </span>
+      </div>
+
+      <div style={styles.divider} />
+
+      <div style={styles.stats}>
+        <div style={styles.stat}>
+          <span style={styles.statLabel}>开盘</span>
+          <span style={styles.statValue}>{stock.openLines}</span>
         </div>
-        <div style={{ ...styles.change, color }}>
-          {isPositive ? '+' : ''}{data.changeAbsolute.toFixed(2)} ({isPositive ? '+' : ''}{data.changePercent.toFixed(2)}%)
+        <div style={styles.stat}>
+          <span style={styles.statLabel}>当前</span>
+          <span style={{ ...styles.statValue, color }}>{stock.currentLines}</span>
+        </div>
+        <div style={styles.stat}>
+          <span style={styles.statLabel}>编辑</span>
+          <span style={styles.statValue}>{stock.editCount}</span>
+        </div>
+        <div style={styles.stat}>
+          <span style={styles.statLabel}>净增</span>
+          <span style={{ ...styles.statValue, color }}>
+            {stock.changeAbsolute > 0 ? '+' : ''}{stock.changeAbsolute}
+          </span>
         </div>
       </div>
-      <div style={styles.stat}>
-        <span style={styles.statLabel}>24H Vol</span>
-        <span style={styles.statValue}>{data.volume24h}</span>
-      </div>
-      <div style={styles.stat}>
-        <span style={styles.statLabel}>ATH</span>
-        <span style={{ ...styles.statValue, color: 'var(--accent-green)' }}>{data.ath.toLocaleString()}</span>
-      </div>
-      <div style={styles.stat}>
-        <span style={styles.statLabel}>ATL</span>
-        <span style={{ ...styles.statValue, color: 'var(--accent-red)' }}>{data.atl.toLocaleString()}</span>
-      </div>
-      <div style={styles.stat}>
-        <span style={styles.statLabel}>Files</span>
-        <span style={styles.statValue}>{data.activeFiles}</span>
-      </div>
-      <div style={styles.status}>
-        <div style={{ ...styles.dot, background: data.connectionStatus === 'connected' ? 'var(--accent-green)' : 'var(--accent-red)' }} />
-        {data.connectionStatus}
-      </div>
+
+      {stock.status !== 'active' && (
+        <div style={{ ...styles.status, ...statusStyle }}>
+          {stock.status === 'ipo' ? '🆕 IPO' :
+           stock.status === 'delisted' ? '📉 退市' :
+           stock.status === 'hot' ? '🔥 活跃' : ''}
+        </div>
+      )}
     </div>
   );
 }

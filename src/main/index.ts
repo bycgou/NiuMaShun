@@ -2,16 +2,13 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'path';
 import Database from './database';
-import GitEngine from './git-engine';
 import FileWatcher, { FileChangeEvent } from './file-watcher';
 import SessionTracker from './session-tracker';
 import KlineAggregator from './kline-aggregator';
-import ScoreCalculator from './score-calculator';
 import LogParser from './log-parser';
 import DiskMonitor from './disk-monitor';
-import StateRecovery from './state-recovery';
 import IpcHandlers from './ipc-handlers';
-import { AGGREGATOR_CHECK_INTERVAL_MS, LOG_SCAN_INTERVAL_MS } from '../shared/constants';
+import { AGGREGATOR_CHECK_INTERVAL_MS, LOG_SCAN_INTERVAL_MS, SCORE_BASE } from '../shared/constants';
 
 let mainWindow: BrowserWindow | null = null;
 let db: Database;
@@ -19,10 +16,19 @@ let fileWatcher: FileWatcher | null = null;
 let sessionTracker: SessionTracker | null = null;
 let ipcHandlers: IpcHandlers;
 
+// 每个文件独立的状态追踪
+interface FileState {
+  currentLines: number;  // 当前行数
+  openLines: number;     // IPO 时的行数（第一次被编辑时）
+  score: number;         // 当前分数（基于行数变化）
+  highScore: number;
+  lowScore: number;
+}
+
 const projectStates = new Map<number, {
-  score: ScoreCalculator;
-  gitEngine: GitEngine;
   aggregator: KlineAggregator;
+  fileStates: Map<string, FileState>;  // filePath -> FileState
+  projectPath: string;
 }>();
 
 function createWindow(): void {
@@ -51,21 +57,10 @@ function createWindow(): void {
 }
 
 async function startMonitoring(projectPath: string, projectId: number): Promise<void> {
-  const gitEngine = new GitEngine(projectPath);
-  const isRepo = await gitEngine.isGitRepo();
+  const aggregator = new KlineAggregator();
+  const fileStates = new Map<string, FileState>();
 
-  if (!isRepo) {
-    db.prepare('UPDATE projects SET is_git_repo = 0 WHERE id = ?').run(projectId);
-  }
-
-  const stateRecovery = new StateRecovery(db);
-  const recovered = stateRecovery.recoverAllProjects();
-  const projectState = recovered.find(p => p.projectId === projectId);
-
-  const score = projectState?.score || new ScoreCalculator();
-  const aggregator = projectState?.aggregator || new KlineAggregator();
-
-  projectStates.set(projectId, { score, gitEngine, aggregator });
+  projectStates.set(projectId, { aggregator, fileStates, projectPath });
 
   // Start file watcher
   fileWatcher = new FileWatcher(projectPath, async (event: FileChangeEvent) => {
@@ -77,16 +72,10 @@ async function startMonitoring(projectPath: string, projectId: number): Promise<
   sessionTracker = new SessionTracker(projectPath);
   sessionTracker.onFileChange();
 
-  // Start aggregator timer
-  setInterval(() => {
-    // Periodic aggregation happens automatically on events
-  }, AGGREGATOR_CHECK_INTERVAL_MS);
-
   // Start log parser
   const logParser = new LogParser();
   setInterval(async () => {
     const usages = await logParser.scanForTokenUsage(projectPath);
-    // Correlate with recent events
     const events = db.getRecentEvents(projectId, 100);
     const correlations = logParser.correlateWithEvents(usages, events.map(e => ({
       filePath: e.filePath,
@@ -94,10 +83,37 @@ async function startMonitoring(projectPath: string, projectId: number): Promise<
       id: e.id,
     })));
     for (const [eventId, tokens] of correlations) {
-      // Update event tokens
       db.prepare('UPDATE events SET tokens = ? WHERE id = ?').run(tokens, eventId);
     }
   }, LOG_SCAN_INTERVAL_MS);
+
+  // 通知渲染器更新文件列表
+  notifyRenderer(projectId);
+}
+
+function getFileState(projectId: number, filePath: string): FileState {
+  const state = projectStates.get(projectId);
+  if (!state) return { currentLines: 0, openLines: 0, score: SCORE_BASE, highScore: SCORE_BASE, lowScore: SCORE_BASE };
+
+  let fileState = state.fileStates.get(filePath);
+  if (!fileState) {
+    // 从数据库恢复状态
+    const klines = db.getFileKlines(projectId, filePath, 'event', 1);
+    if (klines.length > 0) {
+      const lastKline = klines[0];
+      fileState = {
+        currentLines: lastKline.closeLoc,
+        openLines: lastKline.openLoc,
+        score: lastKline.closeScore,
+        highScore: lastKline.highScore,
+        lowScore: lastKline.lowScore,
+      };
+    } else {
+      fileState = { currentLines: 0, openLines: 0, score: SCORE_BASE, highScore: SCORE_BASE, lowScore: SCORE_BASE };
+    }
+    state.fileStates.set(filePath, fileState);
+  }
+  return fileState;
 }
 
 async function handleFileChange(event: FileChangeEvent, projectId: number): Promise<void> {
@@ -108,13 +124,32 @@ async function handleFileChange(event: FileChangeEvent, projectId: number): Prom
 
   const isCreate = event.type === 'add';
   const isDelete = event.type === 'unlink';
-  // Use line counts from FileWatcher (content-based comparison)
   const linesAdded = event.linesAdded;
   const linesDeleted = event.linesDeleted;
 
-  const scoreDelta = state.score.apply(linesAdded, linesDeleted, isCreate, isDelete);
+  // 获取或创建文件状态
+  const fileState = getFileState(projectId, event.filePath);
 
-  // Insert event
+  // 更新文件状态
+  if (isCreate) {
+    fileState.openLines = linesAdded;
+    fileState.currentLines = linesAdded;
+    fileState.score = SCORE_BASE + linesAdded * 2;
+  } else if (isDelete) {
+    fileState.currentLines = 0;
+    fileState.score = SCORE_BASE - fileState.currentLines * 2;
+  } else {
+    fileState.currentLines += linesAdded - linesDeleted;
+    fileState.score += linesAdded * 2 - linesDeleted * 2;
+  }
+
+  // 更新高低分
+  if (fileState.score > fileState.highScore) fileState.highScore = fileState.score;
+  if (fileState.score < fileState.lowScore) fileState.lowScore = fileState.score;
+
+  state.fileStates.set(event.filePath, fileState);
+
+  // 插入事件
   db.insertEvent({
     projectId,
     filePath: event.filePath,
@@ -123,12 +158,12 @@ async function handleFileChange(event: FileChangeEvent, projectId: number): Prom
     linesDeleted,
     fileCreated: isCreate,
     fileDeleted: isDelete,
-    scoreDelta,
+    scoreDelta: linesAdded * 2 - linesDeleted * 2,
     tokens: 0,
     sessionId: sessionTracker?.currentSessionId || null,
   });
 
-  // Update all K-line granularities
+  // 更新该文件的所有 K 线粒度
   const granularities = ['event', '3min', '5min', '15min', '1h', '1d'] as const;
   for (const granularity of granularities) {
     const periodStart = granularity === 'event'
@@ -137,26 +172,37 @@ async function handleFileChange(event: FileChangeEvent, projectId: number): Prom
 
     db.upsertKline({
       projectId,
+      filePath: event.filePath,
       timestamp: periodStart,
       granularity,
-      openScore: state.score.currentScore - scoreDelta,
-      closeScore: state.score.currentScore,
-      highScore: state.score.highScore,
-      lowScore: state.score.lowScore,
-      openLoc: state.score.currentLoc - (linesAdded - linesDeleted),
-      closeLoc: state.score.currentLoc,
+      openScore: fileState.score - (linesAdded * 2 - linesDeleted * 2),
+      closeScore: fileState.score,
+      highScore: fileState.highScore,
+      lowScore: fileState.lowScore,
+      openLoc: fileState.currentLines - (linesAdded - linesDeleted),
+      closeLoc: fileState.currentLines,
       volume: 1,
       tokens: 0,
-      filesCreated: isCreate ? 1 : 0,
-      filesDeleted: isDelete ? 1 : 0,
+      linesAdded,
+      linesDeleted,
     });
   }
 
-  // Send updates to renderer
-  if (mainWindow) {
-    ipcHandlers.sendToRenderer('kline:update', db.getKlines(projectId, ipcHandlers.getCurrentGranularity()));
-    ipcHandlers.sendToRenderer('ticker:update', db.getTickerData(projectId));
-    ipcHandlers.sendToRenderer('event:new', db.getRecentEvents(projectId, 1)[0]);
+  // 通知渲染器
+  notifyRenderer(projectId);
+}
+
+function notifyRenderer(projectId: number): void {
+  if (!mainWindow) return;
+
+  // 发送文件股票列表
+  const stocks = db.getFileStocks(projectId);
+  ipcHandlers.sendToRenderer('stocks:update', stocks);
+
+  // 发送最新事件
+  const latestEvent = db.getRecentEvents(projectId, 1)[0];
+  if (latestEvent) {
+    ipcHandlers.sendToRenderer('event:new', latestEvent);
   }
 }
 
@@ -164,7 +210,6 @@ app.whenReady().then(async () => {
   const dbPath = path.join(app.getPath('userData'), 'tracker.db');
   db = new Database(dbPath);
 
-  // Disk space check
   const diskMonitor = new DiskMonitor(dbPath);
   const { safe } = await diskMonitor.checkDiskSpace();
   if (!safe) {
@@ -174,7 +219,6 @@ app.whenReady().then(async () => {
   createWindow();
   ipcHandlers = new IpcHandlers(db, mainWindow!);
 
-  // Start monitoring when a project is added
   ipcHandlers.setOnProjectAdded(async (id, projectPath) => {
     await startMonitoring(projectPath, id);
   });
