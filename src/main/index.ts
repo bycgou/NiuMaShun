@@ -8,6 +8,8 @@ import KlineAggregator from './kline-aggregator';
 import LogParser from './log-parser';
 import DiskMonitor from './disk-monitor';
 import IpcHandlers from './ipc-handlers';
+import EventCoalescer from './event-coalescer';
+import DelistManager from './delist-manager';
 import { AGGREGATOR_CHECK_INTERVAL_MS, LOG_SCAN_INTERVAL_MS, SCORE_BASE } from '../shared/constants';
 
 let mainWindow: BrowserWindow | null = null;
@@ -29,6 +31,8 @@ const projectStates = new Map<number, {
   aggregator: KlineAggregator;
   fileStates: Map<string, FileState>;  // filePath -> FileState
   projectPath: string;
+  coalescer: EventCoalescer;
+  delistManager: DelistManager;
 }>();
 
 function createWindow(): void {
@@ -59,12 +63,22 @@ function createWindow(): void {
 async function startMonitoring(projectPath: string, projectId: number): Promise<void> {
   const aggregator = new KlineAggregator();
   const fileStates = new Map<string, FileState>();
+  const coalescer = new EventCoalescer();
+  const delistManager = new DelistManager();
 
-  projectStates.set(projectId, { aggregator, fileStates, projectPath });
+  projectStates.set(projectId, { aggregator, fileStates, projectPath, coalescer, delistManager });
 
-  // Start file watcher
-  fileWatcher = new FileWatcher(projectPath, async (event: FileChangeEvent) => {
-    await handleFileChange(event, projectId);
+  // Start file watcher with coalescer
+  fileWatcher = new FileWatcher(projectPath, (event: FileChangeEvent) => {
+    coalescer.process(event, (mergedEvent) => {
+      // Handle delist lifecycle
+      if (mergedEvent.type === 'unlink') {
+        delistManager.markDelisted(mergedEvent.filePath, () => notifyRenderer(projectId));
+      } else if (mergedEvent.type === 'add') {
+        delistManager.cancelDelist(mergedEvent.filePath);
+      }
+      handleFileChange(mergedEvent, projectId);
+    });
   });
   fileWatcher.start();
 
