@@ -65,6 +65,10 @@ export default function KlineChart({
       },
       rightPriceScale: {
         borderColor: '#30363d',
+        scaleMargins: {
+          top: 0.1,
+          bottom: 0.1,
+        },
       },
     });
 

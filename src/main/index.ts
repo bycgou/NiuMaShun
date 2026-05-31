@@ -61,6 +61,16 @@ function createWindow(): void {
 }
 
 async function startMonitoring(projectPath: string, projectId: number): Promise<void> {
+  // Stop previous watchers if any
+  if (fileWatcher) {
+    fileWatcher.stop();
+    fileWatcher = null;
+  }
+  if (sessionTracker) {
+    sessionTracker.stop();
+    sessionTracker = null;
+  }
+
   const aggregator = new KlineAggregator();
   const fileStates = new Map<string, FileState>();
   const coalescer = new EventCoalescer();
