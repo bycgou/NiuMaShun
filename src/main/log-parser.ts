@@ -131,10 +131,27 @@ export default class LogParser {
       for (const block of message.content) {
         if (block.type === 'tool_use') {
           const input = block.input || {};
+          const toolName = block.name;
+
+          // 1. Read/Edit/Write 工具的 file_path
+          if (['Read', 'Edit', 'Write'].includes(toolName) && input.file_path) {
+            filePath = input.file_path;
+            break;
+          }
+
+          // 2. Bash 命令中的文件路径
+          if (toolName === 'Bash' && input.command) {
+            filePath = this.extractFileFromCommand(input.command);
+            if (filePath) break;
+          }
+
+          // 3. 通用 file_path 字段
           if (input.file_path) {
             filePath = input.file_path;
             break;
           }
+
+          // 4. command 字段（通用）
           if (input.command) {
             filePath = this.extractFileFromCommand(input.command);
             if (filePath) break;
@@ -174,14 +191,19 @@ export default class LogParser {
     // 如果没有 token 使用量，跳过
     if (totalTokens === 0) return null;
 
-    // 如果没有文件路径，使用默认值
+    // 如果没有文件路径，使用全局标记
     if (!filePath) {
-      filePath = 'unknown';
+      filePath = '__global__';
     }
 
     // 使路径相对于项目
-    if (filePath.startsWith(projectPath)) {
+    if (filePath !== '__global__' && filePath.startsWith(projectPath)) {
       filePath = path.relative(projectPath, filePath);
+    }
+
+    // 统一使用正斜杠
+    if (filePath !== '__global__') {
+      filePath = filePath.replace(/\\/g, '/');
     }
 
     return {
