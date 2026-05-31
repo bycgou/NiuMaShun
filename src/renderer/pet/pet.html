@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>牛马顺宠物</title>
+  <link rel="stylesheet" href="pet.css">
+</head>
+<body>
+  <div id="pet-container">
+    <div id="bubble-container">
+      <div id="bubble" class="bubble-hidden"></div>
+    </div>
+    <div id="pet-sprite-wrapper" style="position: relative;">
+      <div id="pet-sprite"></div>
+      <div id="level-glow"></div>
+      <div id="level-aura"></div>
+      <div id="level-particles">
+        <div class="level-particle" style="left:18%;top:78%;--p-dur:3.2s;--p-del:0s;--p-dy:-85px;--p-dx:-8px"></div>
+        <div class="level-particle" style="left:38%;top:88%;--p-dur:2.7s;--p-del:.5s;--p-dy:-75px;--p-dx:6px"></div>
+        <div class="level-particle" style="left:58%;top:82%;--p-dur:3.4s;--p-del:.9s;--p-dy:-90px;--p-dx:-4px"></div>
+        <div class="level-particle" style="left:78%;top:72%;--p-dur:2.9s;--p-del:1.4s;--p-dy:-70px;--p-dx:10px"></div>
+        <div class="level-particle" style="left:12%;top:62%;--p-dur:3.1s;--p-del:1.8s;--p-dy:-80px;--p-dx:-12px"></div>
+        <div class="level-particle" style="left:48%;top:92%;--p-dur:3.5s;--p-del:2.2s;--p-dy:-95px;--p-dx:3px"></div>
+        <div class="level-particle" style="left:72%;top:68%;--p-dur:2.8s;--p-del:2.6s;--p-dy:-72px;--p-dx:8px"></div>
+        <div class="level-particle" style="left:28%;top:58%;--p-dur:3.3s;--p-del:3s;--p-dy:-65px;--p-dx:-6px"></div>
+      </div>
+      <div id="level-halo"></div>
+      <div id="token-badge"></div>
+      <div id="level-badge"></div>
+    </div>
+  </div>
+  <script src="pet-renderer.js"></script>
+</body>
+</html>
