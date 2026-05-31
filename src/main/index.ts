@@ -96,8 +96,23 @@ async function startMonitoring(projectPath: string, projectId: number): Promise<
       timestamp: e.timestamp,
       id: e.id,
     })));
-    for (const [eventId, tokens] of correlations) {
-      db.prepare('UPDATE events SET tokens = ? WHERE id = ?').run(tokens, eventId);
+    for (const [eventId, tokenUsage] of correlations) {
+      db.prepare(`
+        UPDATE events SET
+          tokens = ?,
+          input_tokens = ?,
+          output_tokens = ?,
+          cache_read_tokens = ?,
+          cache_creation_tokens = ?
+        WHERE id = ?
+      `).run(
+        tokenUsage.totalTokens,
+        tokenUsage.inputTokens,
+        tokenUsage.outputTokens,
+        tokenUsage.cacheReadTokens,
+        tokenUsage.cacheCreationTokens,
+        eventId
+      );
     }
   }, LOG_SCAN_INTERVAL_MS);
 

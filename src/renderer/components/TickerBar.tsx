@@ -141,6 +141,31 @@ export default function TickerBar({ stock }: { stock: FileStock | null }) {
         </div>
       </div>
 
+      <div style={styles.divider} />
+
+      <div style={styles.stats}>
+        <div style={styles.stat}>
+          <span style={styles.statLabel}>Token</span>
+          <span style={styles.statValue}>{stock.tokens.toLocaleString()}</span>
+        </div>
+        <div style={styles.stat}>
+          <span style={styles.statLabel}>输入</span>
+          <span style={styles.statValue}>{stock.inputTokens.toLocaleString()}</span>
+        </div>
+        <div style={styles.stat}>
+          <span style={styles.statLabel}>输出</span>
+          <span style={styles.statValue}>{stock.outputTokens.toLocaleString()}</span>
+        </div>
+        <div style={styles.stat}>
+          <span style={styles.statLabel}>缓存读</span>
+          <span style={styles.statValue}>{stock.cacheReadTokens.toLocaleString()}</span>
+        </div>
+        <div style={styles.stat}>
+          <span style={styles.statLabel}>缓存写</span>
+          <span style={styles.statValue}>{stock.cacheCreationTokens.toLocaleString()}</span>
+        </div>
+      </div>
+
       {stock.status !== 'active' && (
         <div style={{ ...styles.status, ...statusStyle }}>
           {stock.status === 'ipo' ? '🆕 IPO' :

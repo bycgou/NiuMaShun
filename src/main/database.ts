@@ -30,6 +30,10 @@ interface EventRow {
   file_deleted: number;
   score_delta: number;
   tokens: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_creation_tokens: number;
   session_id: number | null;
 }
 
@@ -83,6 +87,10 @@ export default class Database {
         file_deleted INTEGER DEFAULT 0,
         score_delta REAL NOT NULL,
         tokens INTEGER DEFAULT 0,
+        input_tokens INTEGER DEFAULT 0,
+        output_tokens INTEGER DEFAULT 0,
+        cache_read_tokens INTEGER DEFAULT 0,
+        cache_creation_tokens INTEGER DEFAULT 0,
         session_id INTEGER REFERENCES sessions(id)
       );
 
@@ -91,6 +99,10 @@ export default class Database {
         project_id INTEGER REFERENCES projects(id),
         file_path TEXT NOT NULL,
         tokens INTEGER NOT NULL,
+        input_tokens INTEGER DEFAULT 0,
+        output_tokens INTEGER DEFAULT 0,
+        cache_read_tokens INTEGER DEFAULT 0,
+        cache_creation_tokens INTEGER DEFAULT 0,
         cumulative_tokens INTEGER NOT NULL,
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
       );
@@ -209,6 +221,11 @@ export default class Database {
           COUNT(*) as edit_count,
           SUM(lines_added) as total_added,
           SUM(lines_deleted) as total_deleted,
+          SUM(tokens) as total_tokens,
+          SUM(input_tokens) as total_input_tokens,
+          SUM(output_tokens) as total_output_tokens,
+          SUM(cache_read_tokens) as total_cache_read_tokens,
+          SUM(cache_creation_tokens) as total_cache_creation_tokens,
           MAX(timestamp) as last_edit_time
         FROM events
         WHERE project_id = ?
@@ -228,6 +245,11 @@ export default class Database {
         e.total_added as totalAdded,
         e.total_deleted as totalDeleted,
         e.last_edit_time as lastEditTime,
+        e.total_tokens as totalTokens,
+        e.total_input_tokens as totalInputTokens,
+        e.total_output_tokens as totalOutputTokens,
+        e.total_cache_read_tokens as totalCacheReadTokens,
+        e.total_cache_creation_tokens as totalCacheCreationTokens,
         COALESCE(k.current_lines, 0) as currentLines,
         COALESCE(k.open_lines, 0) as openLines
       FROM file_stats e
@@ -267,7 +289,11 @@ export default class Database {
         editCount: row.editCount,
         status,
         lastEditTime: row.lastEditTime,
-        tokens: 0, // TODO: 从 token 表获取
+        tokens: row.totalTokens || 0,
+        inputTokens: row.totalInputTokens || 0,
+        outputTokens: row.totalOutputTokens || 0,
+        cacheReadTokens: row.totalCacheReadTokens || 0,
+        cacheCreationTokens: row.totalCacheCreationTokens || 0,
       };
     });
   }
@@ -310,16 +336,23 @@ export default class Database {
     fileDeleted: boolean;
     scoreDelta: number;
     tokens: number;
+    inputTokens?: number;
+    outputTokens?: number;
+    cacheReadTokens?: number;
+    cacheCreationTokens?: number;
     sessionId: number | null;
   }): number {
     const result = this.db.prepare(`
-      INSERT INTO events (project_id, file_path, timestamp, lines_added, lines_deleted, file_created, file_deleted, score_delta, tokens, session_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO events (project_id, file_path, timestamp, lines_added, lines_deleted, file_created, file_deleted, score_delta, tokens, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, session_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       data.projectId, data.filePath, data.timestamp,
       data.linesAdded, data.linesDeleted,
       data.fileCreated ? 1 : 0, data.fileDeleted ? 1 : 0,
-      data.scoreDelta, data.tokens, data.sessionId
+      data.scoreDelta, data.tokens,
+      data.inputTokens || 0, data.outputTokens || 0,
+      data.cacheReadTokens || 0, data.cacheCreationTokens || 0,
+      data.sessionId
     );
     return Number(result.lastInsertRowid);
   }
@@ -350,6 +383,10 @@ export default class Database {
       fileDeleted: row.file_deleted === 1,
       scoreDelta: row.score_delta,
       tokens: row.tokens,
+      inputTokens: row.input_tokens || 0,
+      outputTokens: row.output_tokens || 0,
+      cacheReadTokens: row.cache_read_tokens || 0,
+      cacheCreationTokens: row.cache_creation_tokens || 0,
       sessionId: row.session_id,
     };
   }
@@ -360,12 +397,21 @@ export default class Database {
     projectId: number;
     filePath: string;
     tokens: number;
+    inputTokens?: number;
+    outputTokens?: number;
+    cacheReadTokens?: number;
+    cacheCreationTokens?: number;
     cumulativeTokens: number;
   }): void {
     this.db.prepare(`
-      INSERT INTO file_token_history (project_id, file_path, tokens, cumulative_tokens)
-      VALUES (?, ?, ?, ?)
-    `).run(data.projectId, data.filePath, data.tokens, data.cumulativeTokens);
+      INSERT INTO file_token_history (project_id, file_path, tokens, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, cumulative_tokens)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      data.projectId, data.filePath, data.tokens,
+      data.inputTokens || 0, data.outputTokens || 0,
+      data.cacheReadTokens || 0, data.cacheCreationTokens || 0,
+      data.cumulativeTokens
+    );
   }
 
   getTokenRanking(projectId: number, limit = 5): { filePath: string; tokens: number }[] {

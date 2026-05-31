@@ -38,7 +38,11 @@ export interface FileStock {
   editCount: number;       // 编辑次数
   status: StatusBadge;     // active | ipo | delisted | hot
   lastEditTime: string;
-  tokens: number;          // 该文件消耗的 token
+  tokens: number;          // 该文件消耗的总 token
+  inputTokens: number;     // 输入 token
+  outputTokens: number;    // 输出 token
+  cacheReadTokens: number; // 缓存读取 token
+  cacheCreationTokens: number; // 缓存创建 token
 }
 
 export interface EventRecord {
@@ -52,6 +56,10 @@ export interface EventRecord {
   fileDeleted: boolean;
   scoreDelta: number;
   tokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
   sessionId: number | null;
 }
 
