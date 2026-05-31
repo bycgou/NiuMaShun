@@ -113,8 +113,16 @@ export default class FileWatcher {
         this.contentHashes.set(relativePath, newHash);
 
         const diff = this.calculateLineDiff(oldContent, newContent);
-        linesAdded = diff.added;
-        linesDeleted = diff.removed;
+
+        // Semantic volatility: if line count unchanged but content changed,
+        // record the changed lines as both added and removed
+        if (diff.added === 0 && diff.removed === 0 && diff.changed > 0) {
+          linesAdded = diff.changed;
+          linesDeleted = diff.changed;
+        } else {
+          linesAdded = diff.added;
+          linesDeleted = diff.removed;
+        }
         this.fileContentCache.set(relativePath, newContent);
       }
     } else if (type === 'unlink') {
@@ -160,18 +168,18 @@ export default class FileWatcher {
     }
   }
 
-  private calculateLineDiff(oldLines: string[], newLines: string[]): { added: number; removed: number } {
-    // Simple diff: count line additions and removals
-    // For more accurate diff, we could use a proper diff algorithm
+  private calculateLineDiff(oldLines: string[], newLines: string[]): {
+    added: number;
+    removed: number;
+    changed: number;
+  } {
     const oldSet = new Map<string, number>();
     const newSet = new Map<string, number>();
 
-    // Count occurrences of each line in old content
     for (const line of oldLines) {
       oldSet.set(line, (oldSet.get(line) || 0) + 1);
     }
 
-    // Count occurrences of each line in new content
     for (const line of newLines) {
       newSet.set(line, (newSet.get(line) || 0) + 1);
     }
@@ -179,7 +187,6 @@ export default class FileWatcher {
     let removed = 0;
     let added = 0;
 
-    // Count removed lines (in old but not in new, or fewer in new)
     for (const [line, oldCount] of oldSet) {
       const newCount = newSet.get(line) || 0;
       if (oldCount > newCount) {
@@ -187,7 +194,6 @@ export default class FileWatcher {
       }
     }
 
-    // Count added lines (in new but not in old, or more in new)
     for (const [line, newCount] of newSet) {
       const oldCount = oldSet.get(line) || 0;
       if (newCount > oldCount) {
@@ -195,7 +201,16 @@ export default class FileWatcher {
       }
     }
 
-    return { added, removed };
+    // Semantic volatility: count lines that changed content but not count
+    let changed = 0;
+    const maxLen = Math.max(oldLines.length, newLines.length);
+    for (let i = 0; i < maxLen; i++) {
+      if (oldLines[i] !== newLines[i]) {
+        changed++;
+      }
+    }
+
+    return { added, removed, changed };
   }
 
   private shouldIgnore(filePath: string): boolean {
