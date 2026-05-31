@@ -98,9 +98,10 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
+// A 股配色：IPO 红色（涨），退市绿色（跌）
 const STATUS_COLORS: Record<string, string> = {
-  ipo: 'var(--accent-green)',
-  delisted: 'var(--accent-red)',
+  ipo: 'var(--accent-red)',
+  delisted: 'var(--accent-green)',
   hot: 'var(--accent-yellow)',
   active: 'transparent',
 };
