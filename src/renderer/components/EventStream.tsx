@@ -1,6 +1,7 @@
 // src/renderer/components/EventStream.tsx
 import React from 'react';
 import { EventRecord } from '../../shared/types';
+import { formatLocalTime } from '../utils/format';
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -55,7 +56,7 @@ export default function EventStream({ events }: { events: EventRecord[] }) {
           <div key={event.id} style={styles.item}>
             <div style={{ ...styles.dot, background: color }} />
             <span style={styles.time}>
-              {new Date(event.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+              {formatLocalTime(event.timestamp)}
             </span>
             <span style={styles.path}>{event.filePath}</span>
             <span style={{ ...styles.change, color }}>{label}</span>
