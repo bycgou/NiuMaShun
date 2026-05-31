@@ -17,6 +17,15 @@ export default class FileWatcher {
   private onChange: (event: FileChangeEvent) => void;
   private debounceTimers: Map<string, NodeJS.Timeout> = new Map();
   private fileContentCache: Map<string, string[]> = new Map(); // filePath -> lines[]
+  private contentHashes: Map<string, number> = new Map();
+
+  private hashContent(content: string): number {
+    let h = 0;
+    for (let i = 0; i < content.length; i++) {
+      h = Math.imul(31, h) + content.charCodeAt(i) | 0;
+    }
+    return h;
+  }
 
   constructor(projectPath: string, onChange: (event: FileChangeEvent) => void) {
     this.projectPath = projectPath;
@@ -55,6 +64,7 @@ export default class FileWatcher {
     }
     this.debounceTimers.clear();
     this.fileContentCache.clear();
+    this.contentHashes.clear();
   }
 
   private handleEvent(type: FileChangeEvent['type'], filePath: string): void {
@@ -87,12 +97,21 @@ export default class FileWatcher {
       if (content !== null) {
         linesAdded = content.length;
         this.fileContentCache.set(relativePath, content);
+        this.contentHashes.set(relativePath, this.hashContent(content.join('\n')));
       }
     } else if (type === 'change') {
       // Changed file - compare with cached content
       const oldContent = this.fileContentCache.get(relativePath) || [];
       const newContent = this.readFileContent(fullPath);
       if (newContent !== null) {
+        // Hash deduplication: skip if content hasn't actually changed
+        const newHash = this.hashContent(newContent.join('\n'));
+        const oldHash = this.contentHashes.get(relativePath);
+        if (newHash === oldHash) {
+          return null; // Content unchanged, skip event
+        }
+        this.contentHashes.set(relativePath, newHash);
+
         const diff = this.calculateLineDiff(oldContent, newContent);
         linesAdded = diff.added;
         linesDeleted = diff.removed;
@@ -104,6 +123,7 @@ export default class FileWatcher {
       if (oldContent) {
         linesDeleted = oldContent.length;
         this.fileContentCache.delete(relativePath);
+        this.contentHashes.delete(relativePath);
       }
     } else if (type === 'unlinkDir') {
       // Directory deleted - remove all cached entries under this path
@@ -114,6 +134,7 @@ export default class FileWatcher {
             linesDeleted += content.length;
           }
           this.fileContentCache.delete(key);
+          this.contentHashes.delete(key);
         }
       }
     }
