@@ -47,7 +47,8 @@ export default function EventStream({ events }: { events: EventRecord[] }) {
       {events.map(event => {
         const isCreate = event.fileCreated;
         const isDelete = event.fileDeleted;
-        const color = isCreate ? 'var(--accent-green)' : isDelete ? 'var(--accent-red)' : 'var(--accent-blue)';
+        // A 股配色：IPO 红色（涨），退市绿色（跌）
+        const color = isCreate ? 'var(--accent-red)' : isDelete ? 'var(--accent-green)' : 'var(--accent-blue)';
         const label = isCreate ? 'IPO' : isDelete ? '退市' : `${event.linesAdded > 0 ? '+' : ''}${event.linesAdded - event.linesDeleted}`;
 
         return (

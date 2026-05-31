@@ -62,12 +62,13 @@ export default function KlineChart({
     });
 
     const candleSeries = chart.addCandlestickSeries({
-      upColor: '#3fb950',
-      downColor: '#f85149',
-      borderDownColor: '#f85149',
-      borderUpColor: '#3fb950',
-      wickDownColor: '#f85149',
-      wickUpColor: '#3fb950',
+      // A 股配色：红涨绿跌
+      upColor: '#f85149',
+      downColor: '#3fb950',
+      borderDownColor: '#3fb950',
+      borderUpColor: '#f85149',
+      wickDownColor: '#3fb950',
+      wickUpColor: '#f85149',
     });
 
     const volumeSeries = chart.addHistogramSeries({
@@ -118,7 +119,8 @@ export default function KlineChart({
       .map(d => ({
         time: (new Date(d.timestamp).getTime() / 1000) as any,
         value: d.volume,
-        color: d.closeScore >= d.openScore ? '#3fb95066' : '#f8514966',
+        // A 股配色：红涨绿跌
+        color: d.closeScore >= d.openScore ? '#f8514966' : '#3fb95066',
       }));
 
     candleSeriesRef.current.setData(candleData);

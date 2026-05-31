@@ -96,7 +96,8 @@ export default function TickerBar({ stock }: { stock: FileStock | null }) {
   }
 
   const isPositive = stock.changeAbsolute >= 0;
-  const color = isPositive ? 'var(--accent-green)' : 'var(--accent-red)';
+  // A 股配色：红涨绿跌
+  const color = isPositive ? 'var(--accent-red)' : 'var(--accent-green)';
   const arrow = isPositive ? '▲' : stock.changeAbsolute < 0 ? '▼' : '─';
   const statusStyle = STATUS_STYLES[stock.status] || STATUS_STYLES.active;
 

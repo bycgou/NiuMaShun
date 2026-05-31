@@ -148,7 +148,8 @@ export default function StockList({
           const isSelected = stock.filePath === selectedFile;
           const isHovered = stock.filePath === hoveredFile;
           const isPositive = stock.changeAbsolute >= 0;
-          const color = isPositive ? 'var(--accent-green)' : 'var(--accent-red)';
+          // A 股配色：红涨绿跌
+          const color = isPositive ? 'var(--accent-red)' : 'var(--accent-green)';
           const arrow = isPositive ? '▲' : stock.changeAbsolute < 0 ? '▼' : '─';
 
           return (
