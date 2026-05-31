@@ -41,6 +41,8 @@ export default function KlineChart({
     if (!containerRef.current) return;
 
     const chart = createChart(containerRef.current, {
+      width: containerRef.current.clientWidth,
+      height: containerRef.current.clientHeight,
       layout: {
         background: { type: ColorType.Solid, color: '#0d1117' },
         textColor: '#8b949e',
@@ -96,16 +98,18 @@ export default function KlineChart({
     candleSeriesRef.current = candleSeries;
     volumeSeriesRef.current = volumeSeries;
 
-    const handleResize = () => {
-      if (containerRef.current) {
-        chart.applyOptions({ width: containerRef.current.clientWidth });
+    const resizeObserver = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) {
+          chart.applyOptions({ width, height });
+        }
       }
-    };
-
-    window.addEventListener('resize', handleResize);
+    });
+    resizeObserver.observe(containerRef.current);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
       chart.remove();
     };
   }, []);
