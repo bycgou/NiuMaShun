@@ -131,3 +131,7 @@ export const INTERVALS: IntervalOption[] = [
   { label: '1h', value: '1h' },
   { label: '1d', value: '1d' },
 ];
+
+// 宠物相关类型导出
+export type { PetState, PetEvent, PetAction, PetSpriteState, LevelConfig } from './pet-types';
+export { LEVEL_THRESHOLDS, LEVEL_COLORS, PET_SPRITE_STATES } from './pet-types';
