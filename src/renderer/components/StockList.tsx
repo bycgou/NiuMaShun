@@ -158,6 +158,7 @@ export default function StockList({
                 ...styles.stockItem,
                 ...(isHovered ? styles.stockItemHover : {}),
                 ...(isSelected ? styles.stockItemSelected : {}),
+                opacity: stock.status === 'delisted' ? 0.5 : 1,
               }}
               onMouseEnter={() => setHoveredFile(stock.filePath)}
               onMouseLeave={() => setHoveredFile(null)}
