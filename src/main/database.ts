@@ -1,5 +1,6 @@
 import BetterSqlite3 from 'better-sqlite3';
 import { KlineData, EventRecord, FileStock, Granularity } from '../shared/types';
+import { PetState, PetEvent } from '../shared/pet-types';
 
 interface KlineRow {
   id: number;
@@ -127,7 +128,31 @@ export default class Database {
 
       CREATE INDEX IF NOT EXISTS idx_events_project_file_ts ON events(project_id, file_path, timestamp);
       CREATE INDEX IF NOT EXISTS idx_kline_project_file_gran_ts ON kline(project_id, file_path, granularity, timestamp);
+
+      -- 宠物状态表
+      CREATE TABLE IF NOT EXISTS pet_state (
+        id INTEGER PRIMARY KEY DEFAULT 1,
+        pet_slug TEXT DEFAULT 'boba',
+        level INTEGER DEFAULT 1,
+        total_events INTEGER DEFAULT 0,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- 宠物事件历史
+      CREATE TABLE IF NOT EXISTS pet_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_type TEXT NOT NULL,
+        pet_action TEXT,
+        bubble_text TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
     `);
+
+    // 初始化默认宠物状态
+    const petState = this.db.prepare('SELECT id FROM pet_state WHERE id = 1').get();
+    if (!petState) {
+      this.db.prepare('INSERT INTO pet_state (id, pet_slug, level, total_events) VALUES (1, ?, 1, 0)').run('boba');
+    }
   }
 
   prepare(sql: string): BetterSqlite3.Statement {
@@ -467,5 +492,90 @@ export default class Database {
 
   checkpoint(): void {
     this.db.pragma('wal_checkpoint(PASSIVE)');
+  }
+
+  // --- Pet operations ---
+
+  getPetState(): PetState | undefined {
+    return this.db.prepare(
+      'SELECT id, pet_slug as petSlug, level, total_events as totalEvents, updated_at as updatedAt FROM pet_state WHERE id = 1'
+    ).get() as any;
+  }
+
+  updatePetState(data: { petSlug?: string; level?: number; totalEvents?: number }): void {
+    const current = this.getPetState();
+    if (!current) return;
+
+    this.db.prepare(`
+      UPDATE pet_state SET
+        pet_slug = ?,
+        level = ?,
+        total_events = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = 1
+    `).run(
+      data.petSlug ?? current.petSlug,
+      data.level ?? current.level,
+      data.totalEvents ?? current.totalEvents
+    );
+  }
+
+  incrementPetEvents(count: number = 1): PetState {
+    const current = this.getPetState();
+    if (!current) throw new Error('Pet state not found');
+
+    const newTotal = current.totalEvents + count;
+
+    // 计算新等级
+    const { level } = this.calculateLevel(newTotal);
+
+    this.db.prepare(`
+      UPDATE pet_state SET
+        total_events = ?,
+        level = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = 1
+    `).run(newTotal, level);
+
+    return this.getPetState()!;
+  }
+
+  private calculateLevel(totalEvents: number): { level: number; levelName: string } {
+    const thresholds = [
+      { level: 1, name: 'Byte', threshold: 0 },
+      { level: 2, name: 'Process', threshold: 50 },
+      { level: 3, name: 'Thread', threshold: 200 },
+      { level: 4, name: 'Module', threshold: 500 },
+      { level: 5, name: 'Kernel', threshold: 1000 },
+      { level: 6, name: 'Neural', threshold: 2000 },
+      { level: 7, name: 'Quantum', threshold: 5000 },
+      { level: 8, name: 'Singularity', threshold: 10000 },
+    ];
+
+    for (let i = thresholds.length - 1; i >= 0; i--) {
+      if (totalEvents >= thresholds[i].threshold) {
+        return { level: thresholds[i].level, levelName: thresholds[i].name };
+      }
+    }
+
+    return { level: 1, levelName: 'Byte' };
+  }
+
+  insertPetEvent(data: {
+    eventType: string;
+    petAction?: string;
+    bubbleText?: string;
+  }): number {
+    const result = this.db.prepare(`
+      INSERT INTO pet_events (event_type, pet_action, bubble_text)
+      VALUES (?, ?, ?)
+    `).run(data.eventType, data.petAction || null, data.bubbleText || null);
+    return Number(result.lastInsertRowid);
+  }
+
+  getRecentPetEvents(limit: number): PetEvent[] {
+    return this.db.prepare(
+      'SELECT id, event_type as eventType, pet_action as petAction, bubble_text as bubbleText, timestamp FROM pet_events ORDER BY timestamp DESC LIMIT ?'
+    ).all(limit) as any[];
   }
 }
