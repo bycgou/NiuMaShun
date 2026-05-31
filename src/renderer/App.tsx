@@ -35,10 +35,10 @@ export default function App() {
     const stocksData = await window.api.stocks.get(projectId);
     setStocks(stocksData);
     // 如果没有选中文件，选中第一个
-    if (!selectedFile && stocksData.length > 0) {
-      setSelectedFile(stocksData[0].filePath);
+    if (stocksData.length > 0) {
+      setSelectedFile(prev => prev || stocksData[0].filePath);
     }
-  }, [projectId, selectedFile]);
+  }, [projectId]);
 
   // 获取选中文件的 K 线数据
   const refreshKlineData = useCallback(async () => {

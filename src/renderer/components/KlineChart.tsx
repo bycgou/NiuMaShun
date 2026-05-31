@@ -51,10 +51,17 @@ export default function KlineChart({
       },
       crosshair: {
         mode: 0,
+        vertLine: {
+          labelBackgroundColor: '#58a6ff',
+        },
+        horzLine: {
+          labelBackgroundColor: '#58a6ff',
+        },
       },
       timeScale: {
         borderColor: '#30363d',
         timeVisible: true,
+        secondsVisible: false,
       },
       rightPriceScale: {
         borderColor: '#30363d',

@@ -12,6 +12,7 @@ export default class IpcHandlers {
   private currentGranularity: Granularity = 'event';
   private mainWindow: BrowserWindow;
   private onProjectAdded: ((id: number, path: string) => void) | null = null;
+  private onProjectSwitched: ((id: number) => void) | null = null;
 
   constructor(db: Database, mainWindow: BrowserWindow) {
     this.db = db;
@@ -21,6 +22,10 @@ export default class IpcHandlers {
 
   setOnProjectAdded(callback: (id: number, path: string) => void): void {
     this.onProjectAdded = callback;
+  }
+
+  setOnProjectSwitched(callback: (id: number) => void): void {
+    this.onProjectSwitched = callback;
   }
 
   private registerHandlers(): void {
@@ -50,6 +55,8 @@ export default class IpcHandlers {
 
     ipcMain.handle(IPC_CHANNELS.PROJECT_SWITCH, (_event, projectId: number) => {
       this.currentProjectId = projectId;
+      // 通知主进程开始监控新项目
+      this.onProjectSwitched?.(projectId);
       return this.db.getProject(projectId);
     });
 

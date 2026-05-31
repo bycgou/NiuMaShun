@@ -252,6 +252,14 @@ app.whenReady().then(async () => {
     await startMonitoring(projectPath, id);
   });
 
+  // 切换项目时开始监控
+  ipcHandlers.setOnProjectSwitched(async (id) => {
+    const project = db.getProject(id);
+    if (project) {
+      await startMonitoring(project.path, id);
+    }
+  });
+
   // Auto-start monitoring for the last active project
   const projects = db.getProjects();
   if (projects.length > 0) {
