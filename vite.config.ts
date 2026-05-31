@@ -14,6 +14,7 @@ export default defineConfig({
         main: path.resolve(__dirname, 'src/renderer/index.html'),
         pet: path.resolve(__dirname, 'src/renderer/pet/pet.html'),
       },
+      external: ['electron', '@electron/remote'],
     },
   },
   resolve: {

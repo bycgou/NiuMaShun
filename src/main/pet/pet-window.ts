@@ -1,5 +1,6 @@
 import { BrowserWindow, ipcMain, Menu, dialog, app } from 'electron';
 import path from 'path';
+import electronRemote from '@electron/remote/main';
 import Database from '../database';
 import { mapEventToAction } from './event-mapper';
 import { getRandomGreeting, getLevelName } from './pet-state';
@@ -13,6 +14,7 @@ let greetingInterval: ReturnType<typeof setInterval> | null = null;
 
 export function createPetWindow(database: Database): BrowserWindow {
   db = database;
+  electronRemote.initialize();
 
   petWindow = new BrowserWindow({
     width: 300,
@@ -32,8 +34,13 @@ export function createPetWindow(database: Database): BrowserWindow {
   });
 
   // 加载宠物 HTML
-  const htmlPath = path.join(__dirname, '../../renderer/pet/pet.html');
-  petWindow.loadFile(htmlPath);
+  if (process.env.NODE_ENV === 'development') {
+    petWindow.loadURL('http://localhost:5173/pet/pet.html');
+  } else {
+    const htmlPath = path.join(__dirname, '../../renderer/pet/pet.html');
+    petWindow.loadFile(htmlPath);
+  }
+  electronRemote.enable(petWindow.webContents);
 
   petWindow.setVisibleOnAllWorkspaces(true);
   petWindow.setAlwaysOnTop(true, 'screen-saver');

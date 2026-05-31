@@ -13,6 +13,7 @@ release/
 # AI tool configs
 .claude/
 .superpowers/
+docs/
 
 # Build artifacts
 *.js
