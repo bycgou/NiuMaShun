@@ -11,6 +11,8 @@ import IpcHandlers from './ipc-handlers';
 import EventCoalescer from './event-coalescer';
 import DelistManager from './delist-manager';
 import { AGGREGATOR_CHECK_INTERVAL_MS, LOG_SCAN_INTERVAL_MS, SCORE_BASE, SCORE_PER_LINE, SCORE_PER_FILE_CREATE, SCORE_PER_FILE_DELETE } from '../shared/constants';
+import { createPetWindow, destroyPetWindow } from './pet/pet-window';
+import { startPetServer } from './pet/pet-server';
 
 let mainWindow: BrowserWindow | null = null;
 let db: Database;
@@ -312,11 +314,21 @@ app.whenReady().then(async () => {
   if (projects.length > 0) {
     await startMonitoring(projects[0].path, projects[0].id);
   }
+
+  // 初始化宠物系统
+  try {
+    const petWin = createPetWindow(db);
+    const petPort = await startPetServer();
+    console.log(`Pet server started on port ${petPort}`);
+  } catch (err) {
+    console.error('Failed to start pet system:', err);
+  }
 });
 
 app.on('window-all-closed', () => {
   fileWatcher?.stop();
   sessionTracker?.stop();
+  destroyPetWindow();
   db.close();
   if (process.platform !== 'darwin') app.quit();
 });
