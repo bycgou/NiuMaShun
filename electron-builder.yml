@@ -4,6 +4,7 @@ directories:
   output: release
 files:
   - dist/**/*
+  - src/renderer/pet/**/*
   - package.json
 mac:
   category: public.app-category.developer-tools
