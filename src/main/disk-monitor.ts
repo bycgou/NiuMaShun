@@ -13,6 +13,10 @@ export default class DiskMonitor {
 
   async checkDiskSpace(): Promise<{ available: number; safe: boolean }> {
     try {
+      // fs.statfsSync is not available on Windows
+      if (process.platform === 'win32') {
+        return { available: Infinity, safe: true };
+      }
       const stats = fs.statfsSync(this.dbPath);
       const available = stats.bavail * stats.bsize;
       return { available, safe: available > this.thresholdBytes };

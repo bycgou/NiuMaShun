@@ -38,6 +38,11 @@ export const IPC_CHANNELS = {
   WINDOW_MAXIMIZE: 'window:maximize',
   WINDOW_CLOSE: 'window:close',
 
+  // Stocks
+  STOCKS_GET: 'stocks:get',
+  STOCK_FILE_GET: 'stock:file:get',
+  KLINE_FILE_GET: 'kline:file:get',
+
   // Status
   STATUS_GET: 'status:get',
 } as const;

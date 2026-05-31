@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { createChart, IChartApi, ISeriesApi, CandlestickData, HistogramData, ColorType } from 'lightweight-charts';
+import { createChart, IChartApi, ISeriesApi, CandlestickData, HistogramData, ColorType, UTCTimestamp } from 'lightweight-charts';
 import { KlineData } from '../../shared/types';
 
 const styles: Record<string, React.CSSProperties> = {
@@ -113,26 +113,33 @@ export default function KlineChart({
   useEffect(() => {
     if (!candleSeriesRef.current || !volumeSeriesRef.current) return;
 
-    const candleData: CandlestickData[] = data
-      .slice()
-      .reverse()
-      .map(d => ({
-        time: (new Date(d.timestamp).getTime() / 1000) as any,
-        open: d.openScore,
-        high: d.highScore,
-        low: d.lowScore,
-        close: d.closeScore,
-      }));
+    const sorted = data.slice().reverse();
 
-    const volumeData: HistogramData[] = data
-      .slice()
-      .reverse()
-      .map(d => ({
-        time: (new Date(d.timestamp).getTime() / 1000) as any,
-        value: d.volume,
-        // A 股配色：红涨绿跌
-        color: d.closeScore >= d.openScore ? '#f8514966' : '#3fb95066',
-      }));
+    // Deduplicate timestamps by bumping duplicates by 1 second
+    const seenTimes = new Set<number>();
+    const dedupedTimes: UTCTimestamp[] = sorted.map(d => {
+      let time = Math.floor(new Date(d.timestamp).getTime() / 1000) as UTCTimestamp;
+      while (seenTimes.has(time)) {
+        time = (time + 1) as UTCTimestamp;
+      }
+      seenTimes.add(time);
+      return time;
+    });
+
+    const candleData: CandlestickData[] = sorted.map((d, i) => ({
+      time: dedupedTimes[i],
+      open: d.openScore,
+      high: d.highScore,
+      low: d.lowScore,
+      close: d.closeScore,
+    }));
+
+    const volumeData: HistogramData[] = sorted.map((d, i) => ({
+      time: dedupedTimes[i],
+      value: d.volume,
+      // A 股配色：红涨绿跌
+      color: d.closeScore >= d.openScore ? '#f8514966' : '#3fb95066',
+    }));
 
     candleSeriesRef.current.setData(candleData);
     volumeSeriesRef.current.setData(volumeData);

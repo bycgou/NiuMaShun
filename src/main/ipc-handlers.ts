@@ -111,17 +111,17 @@ export default class IpcHandlers {
     });
 
     // 获取文件股票列表
-    ipcMain.handle('stocks:get', (_event, projectId: number) => {
+    ipcMain.handle(IPC_CHANNELS.STOCKS_GET, (_event, projectId: number) => {
       return this.db.getFileStocks(projectId);
     });
 
     // 获取单个文件的 K 线数据
-    ipcMain.handle('kline:file:get', (_event, projectId: number, filePath: string, granularity: Granularity) => {
+    ipcMain.handle(IPC_CHANNELS.KLINE_FILE_GET, (_event, projectId: number, filePath: string, granularity: Granularity) => {
       return this.db.getFileKlines(projectId, filePath, granularity);
     });
 
     // 获取单个文件的股票信息
-    ipcMain.handle('stock:file:get', (_event, projectId: number, filePath: string) => {
+    ipcMain.handle(IPC_CHANNELS.STOCK_FILE_GET, (_event, projectId: number, filePath: string) => {
       return this.db.getFileStock(projectId, filePath);
     });
   }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Component, ReactNode } from 'react';
 import TitleBar from './components/TitleBar';
 import TickerBar from './components/TickerBar';
 import IntervalBar from './components/IntervalBar';
@@ -6,7 +6,33 @@ import StockList from './components/StockList';
 import KlineChart from './components/KlineChart';
 import BottomPanel from './components/BottomPanel';
 import StartupScreen from './components/StartupScreen';
-import { Granularity, KlineData, EventRecord, FileStock } from '../shared/types';
+import { Granularity, KlineData, EventRecord, FileStock, DailyStats as DailyStatsType } from '../shared/types';
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
+  state = { hasError: false, error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 24, color: '#f85149', background: '#0d1117', height: '100vh', fontFamily: 'monospace' }}>
+          <h2>Something went wrong</h2>
+          <pre style={{ whiteSpace: 'pre-wrap', color: '#8b949e' }}>{this.state.error?.message}</pre>
+          <button
+            onClick={() => this.setState({ hasError: false, error: null })}
+            style={{ marginTop: 12, padding: '6px 16px', background: '#21262d', color: '#c9d1d9', border: '1px solid #30363d', borderRadius: 6, cursor: 'pointer' }}
+          >
+            Retry
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function App() {
   const [projectId, setProjectId] = useState<number | null>(null);
@@ -18,7 +44,7 @@ export default function App() {
   const [klineData, setKlineData] = useState<KlineData[]>([]);
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [tokenRanking, setTokenRanking] = useState<{ filePath: string; tokens: number }[]>([]);
-  const [dailyStats, setDailyStats] = useState<any>(null);
+  const [dailyStats, setDailyStats] = useState<DailyStatsType | null>(null);
 
   useEffect(() => {
     window.api.project.list().then(projects => {
@@ -99,7 +125,7 @@ export default function App() {
   }
 
   return (
-    <>
+    <ErrorBoundary>
       <TitleBar onProjectAdded={handleProjectAdded} onProjectSwitch={handleProjectSwitch} />
       <TickerBar stock={selectedStock} />
       <IntervalBar
@@ -125,6 +151,6 @@ export default function App() {
         tokenRanking={tokenRanking}
         dailyStats={dailyStats}
       />
-    </>
+    </ErrorBoundary>
   );
 }

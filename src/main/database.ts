@@ -124,6 +124,9 @@ export default class Database {
         total_tokens INTEGER,
         UNIQUE(project_id, date)
       );
+
+      CREATE INDEX IF NOT EXISTS idx_events_project_file_ts ON events(project_id, file_path, timestamp);
+      CREATE INDEX IF NOT EXISTS idx_kline_project_file_gran_ts ON kline(project_id, file_path, granularity, timestamp);
     `);
   }
 
@@ -451,15 +454,15 @@ export default class Database {
   // --- Cleanup ---
 
   cleanupOldData(retentionDays: number): void {
-    this.db.exec(`
+    const cutoff = this.db.prepare(`SELECT datetime('now', '-' || ? || ' days') as cutoff`).get(retentionDays) as { cutoff: string };
+    this.db.prepare(`
       INSERT OR IGNORE INTO daily_summary (project_id, date, total_loc, active_minutes, total_tokens)
       SELECT project_id, DATE(timestamp), SUM(lines_added - lines_deleted), 0, SUM(tokens)
       FROM events
-      WHERE timestamp < datetime('now', '-${retentionDays} days')
-      GROUP BY project_id, DATE(timestamp);
-
-      DELETE FROM events WHERE timestamp < datetime('now', '-${retentionDays} days');
-    `);
+      WHERE timestamp < ?
+      GROUP BY project_id, DATE(timestamp)
+    `).run(cutoff.cutoff);
+    this.db.prepare('DELETE FROM events WHERE timestamp < ?').run(cutoff.cutoff);
   }
 
   checkpoint(): void {

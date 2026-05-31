@@ -10,7 +10,7 @@ import DiskMonitor from './disk-monitor';
 import IpcHandlers from './ipc-handlers';
 import EventCoalescer from './event-coalescer';
 import DelistManager from './delist-manager';
-import { AGGREGATOR_CHECK_INTERVAL_MS, LOG_SCAN_INTERVAL_MS, SCORE_BASE } from '../shared/constants';
+import { AGGREGATOR_CHECK_INTERVAL_MS, LOG_SCAN_INTERVAL_MS, SCORE_BASE, SCORE_PER_LINE, SCORE_PER_FILE_CREATE, SCORE_PER_FILE_DELETE } from '../shared/constants';
 
 let mainWindow: BrowserWindow | null = null;
 let db: Database;
@@ -33,6 +33,7 @@ const projectStates = new Map<number, {
   projectPath: string;
   coalescer: EventCoalescer;
   delistManager: DelistManager;
+  logScanInterval: ReturnType<typeof setInterval> | null;
 }>();
 
 function createWindow(): void {
@@ -53,7 +54,9 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(path.join(__dirname, '../../renderer/index.html'));
   }
-  mainWindow.webContents.openDevTools();
+  if (process.env.NODE_ENV === 'development') {
+    mainWindow.webContents.openDevTools();
+  }
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -71,12 +74,16 @@ async function startMonitoring(projectPath: string, projectId: number): Promise<
     sessionTracker = null;
   }
 
+  // Clean up all old project states (clear intervals and data)
+  for (const [, state] of projectStates) {
+    if (state.logScanInterval) clearInterval(state.logScanInterval);
+  }
+  projectStates.clear();
+
   const aggregator = new KlineAggregator();
   const fileStates = new Map<string, FileState>();
   const coalescer = new EventCoalescer();
   const delistManager = new DelistManager();
-
-  projectStates.set(projectId, { aggregator, fileStates, projectPath, coalescer, delistManager });
 
   // Start file watcher with coalescer
   fileWatcher = new FileWatcher(projectPath, (event: FileChangeEvent) => {
@@ -94,11 +101,27 @@ async function startMonitoring(projectPath: string, projectId: number): Promise<
 
   // Start session tracker
   sessionTracker = new SessionTracker(projectPath);
+  sessionTracker.setCallbacks(
+    () => {
+      // Session start: insert a new session record and set its ID
+      const result = db.prepare(
+        'INSERT INTO sessions (project_id, started_at) VALUES (?, ?)'
+      ).run(projectId, new Date().toISOString());
+      sessionTracker?.setSessionId(Number(result.lastInsertRowid));
+    },
+    () => {
+      // Session end: update the session record
+      const sessionId = sessionTracker?.currentSessionId;
+      if (sessionId) {
+        db.prepare('UPDATE sessions SET ended_at = ? WHERE id = ?').run(new Date().toISOString(), sessionId);
+      }
+    }
+  );
   sessionTracker.onFileChange();
 
   // Start log parser
   const logParser = new LogParser();
-  setInterval(async () => {
+  const logScanInterval = setInterval(async () => {
     const usages = await logParser.scanForTokenUsage(projectPath);
     const events = db.getRecentEvents(projectId, 100);
     const correlations = logParser.correlateWithEvents(usages, events.map(e => ({
@@ -125,6 +148,8 @@ async function startMonitoring(projectPath: string, projectId: number): Promise<
       );
     }
   }, LOG_SCAN_INTERVAL_MS);
+
+  projectStates.set(projectId, { aggregator, fileStates, projectPath, coalescer, delistManager, logScanInterval });
 
   // 通知渲染器更新文件列表
   notifyRenderer(projectId);
@@ -168,18 +193,30 @@ async function handleFileChange(event: FileChangeEvent, projectId: number): Prom
 
   // 获取或创建文件状态
   const fileState = getFileState(projectId, event.filePath);
+  const prevScore = fileState.score;
+  const prevLines = fileState.currentLines;
+
+  // 计算分数变化（在更新状态之前）
+  let scoreDelta: number;
+  if (isCreate) {
+    scoreDelta = linesAdded * SCORE_PER_LINE + SCORE_PER_FILE_CREATE;
+  } else if (isDelete) {
+    scoreDelta = -(fileState.currentLines) * SCORE_PER_LINE + SCORE_PER_FILE_DELETE;
+  } else {
+    scoreDelta = linesAdded * SCORE_PER_LINE - linesDeleted * SCORE_PER_LINE;
+  }
 
   // 更新文件状态
   if (isCreate) {
     fileState.openLines = linesAdded;
     fileState.currentLines = linesAdded;
-    fileState.score = SCORE_BASE + linesAdded * 2;
+    fileState.score = SCORE_BASE + scoreDelta;
   } else if (isDelete) {
+    fileState.score = SCORE_BASE - fileState.currentLines * SCORE_PER_LINE + SCORE_PER_FILE_DELETE;
     fileState.currentLines = 0;
-    fileState.score = SCORE_BASE - fileState.currentLines * 2;
   } else {
     fileState.currentLines += linesAdded - linesDeleted;
-    fileState.score += linesAdded * 2 - linesDeleted * 2;
+    fileState.score += scoreDelta;
   }
 
   // 更新高低分
@@ -197,7 +234,7 @@ async function handleFileChange(event: FileChangeEvent, projectId: number): Prom
     linesDeleted,
     fileCreated: isCreate,
     fileDeleted: isDelete,
-    scoreDelta: linesAdded * 2 - linesDeleted * 2,
+    scoreDelta,
     tokens: 0,
     sessionId: sessionTracker?.currentSessionId || null,
   });
@@ -214,11 +251,11 @@ async function handleFileChange(event: FileChangeEvent, projectId: number): Prom
       filePath: event.filePath,
       timestamp: periodStart,
       granularity,
-      openScore: fileState.score - (linesAdded * 2 - linesDeleted * 2),
+      openScore: prevScore,
       closeScore: fileState.score,
       highScore: fileState.highScore,
       lowScore: fileState.lowScore,
-      openLoc: fileState.currentLines - (linesAdded - linesDeleted),
+      openLoc: prevLines,
       closeLoc: fileState.currentLines,
       volume: 1,
       tokens: 0,

@@ -4,5 +4,19 @@ release/
 *.db
 *.db-wal
 *.db-shm
-.superpowers/
 .DS_Store
+
+# IDE
+.idea/
+.vscode/
+
+# AI tool configs
+.claude/
+.superpowers/
+
+# Build artifacts
+*.js
+!vite.config.js
+
+# Misc
+.tables

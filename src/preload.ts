@@ -23,6 +23,9 @@ const IPC_CHANNELS = {
   WINDOW_MINIMIZE: 'window:minimize',
   WINDOW_MAXIMIZE: 'window:maximize',
   WINDOW_CLOSE: 'window:close',
+  STOCKS_GET: 'stocks:get',
+  STOCK_FILE_GET: 'stock:file:get',
+  KLINE_FILE_GET: 'kline:file:get',
   STATUS_GET: 'status:get',
 };
 
@@ -50,12 +53,12 @@ const api = {
     get: (projectId: number) => ipcRenderer.invoke(IPC_CHANNELS.FILE_TREE_GET, projectId),
   },
   stocks: {
-    get: (projectId: number) => ipcRenderer.invoke('stocks:get', projectId),
-    getFile: (projectId: number, filePath: string) => ipcRenderer.invoke('stock:file:get', projectId, filePath),
+    get: (projectId: number) => ipcRenderer.invoke(IPC_CHANNELS.STOCKS_GET, projectId),
+    getFile: (projectId: number, filePath: string) => ipcRenderer.invoke(IPC_CHANNELS.STOCK_FILE_GET, projectId, filePath),
   },
   fileKline: {
     get: (projectId: number, filePath: string, granularity: Granularity) =>
-      ipcRenderer.invoke('kline:file:get', projectId, filePath, granularity),
+      ipcRenderer.invoke(IPC_CHANNELS.KLINE_FILE_GET, projectId, filePath, granularity),
   },
   tokenRanking: {
     get: (projectId: number) => ipcRenderer.invoke(IPC_CHANNELS.TOKEN_RANKING_GET, projectId),

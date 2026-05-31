@@ -115,6 +115,14 @@ export interface IntervalOption {
   value: Granularity;
 }
 
+export interface DailyStats {
+  filesChanged: number;
+  linesAdded: number;
+  linesDeleted: number;
+  operations: number;
+  tokensUsed: number;
+}
+
 export const INTERVALS: IntervalOption[] = [
   { label: '实时', value: 'event' },
   { label: '3min', value: '3min' },

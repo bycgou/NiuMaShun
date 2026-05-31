@@ -17,7 +17,7 @@ export interface TokenUsage {
 export default class LogParser {
   private claudeDir: string;
   private lastScanTime: Date;
-  private processedFiles: Set<string> = new Set();
+  private processedFileSizes: Map<string, number> = new Map();
 
   constructor() {
     this.claudeDir = path.join(os.homedir(), '.claude', 'projects');
@@ -77,11 +77,13 @@ export default class LogParser {
         const fourteenDaysAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
         if (stat.mtimeMs < fourteenDaysAgo) continue;
 
-        if (this.processedFiles.has(fullPath)) continue;
+        // Skip if file size hasn't changed since last scan
+        const lastSize = this.processedFileSizes.get(fullPath);
+        if (lastSize !== undefined && lastSize === stat.size) continue;
 
         const usage = await this.parseLogFile(fullPath, projectPath);
         results.push(...usage);
-        this.processedFiles.add(fullPath);
+        this.processedFileSizes.set(fullPath, stat.size);
       }
     } catch {
       // Ignore errors in log scanning
