@@ -53,7 +53,7 @@ export default function EventStream({ events }: { events: EventRecord[] }) {
         const label = isCreate ? 'IPO' : isDelete ? '退市' : `${event.linesAdded > 0 ? '+' : ''}${event.linesAdded - event.linesDeleted}`;
 
         return (
-          <div key={event.id} style={styles.item}>
+          <div key={`${event.id}-${event.timestamp}`} style={styles.item}>
             <div style={{ ...styles.dot, background: color }} />
             <span style={styles.time}>
               {formatLocalTime(event.timestamp)}

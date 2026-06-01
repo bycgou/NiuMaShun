@@ -20,6 +20,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@shared': path.resolve(__dirname, 'src/shared'),
+      'electron': path.resolve(__dirname, 'src/renderer/shims/electron.ts'),
+      '@electron/remote': path.resolve(__dirname, 'src/renderer/shims/electron-remote.ts'),
     },
   },
   test: {

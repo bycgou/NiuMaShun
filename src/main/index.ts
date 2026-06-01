@@ -2,6 +2,7 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'path';
 import Database from './database';
+import { registerSpriteScheme, registerSpriteProtocol } from './pet/sprite-protocol';
 import FileWatcher, { FileChangeEvent } from './file-watcher';
 import SessionTracker from './session-tracker';
 import KlineAggregator from './kline-aggregator';
@@ -38,6 +39,17 @@ const projectStates = new Map<number, {
   logScanInterval: ReturnType<typeof setInterval> | null;
 }>();
 
+async function loadWithRetry(win: BrowserWindow, url: string, maxRetries = 20, delayMs = 500): Promise<void> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      await win.loadURL(url);
+      return;
+    } catch {
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -52,12 +64,12 @@ function createWindow(): void {
   });
 
   if (process.env.NODE_ENV === 'development') {
-    mainWindow.loadURL('http://localhost:5173');
+    loadWithRetry(mainWindow, 'http://localhost:5173');
+    mainWindow.webContents.on('did-finish-load', () => {
+      mainWindow?.webContents.openDevTools();
+    });
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../../renderer/index.html'));
-  }
-  if (process.env.NODE_ENV === 'development') {
-    mainWindow.webContents.openDevTools();
+    mainWindow.loadFile(path.join(__dirname, '../../../renderer/index.html'));
   }
 
   mainWindow.on('closed', () => {
@@ -284,7 +296,10 @@ function notifyRenderer(projectId: number): void {
   }
 }
 
+registerSpriteScheme();
+
 app.whenReady().then(async () => {
+  registerSpriteProtocol();
   const dbPath = path.join(app.getPath('userData'), 'tracker.db');
   db = new Database(dbPath);
 

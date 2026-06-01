@@ -76,16 +76,30 @@ function init() {
     updateTokenBadge(data.total_tokens);
   });
 
+  ipcRenderer.on('pet:download-start', (_event, slug: string) => {
+    showBubble(`正在下载 ${slug}...`, 10000);
+    setPetAction('waiting');
+  });
+
+  ipcRenderer.on('pet:download-done', (_event, data: { slug: string; ok: boolean; error?: string }) => {
+    if (data.ok) {
+      showBubble('下载完成！切换中...', 3000);
+      setPetAction('jumping');
+    } else {
+      showBubble(`下载失败: ${data.error || '未知错误'}`, 5000);
+      setPetAction('failed');
+    }
+  });
+
   ipcRenderer.send('pet:get-state');
 }
 
 function loadPetSprite(slug: string) {
   if (!slug) return;
-  const homeDir = (process.env.USERPROFILE || process.env.HOME || '').replace(/\\/g, '/');
   const exts = ['webp', 'png'];
   for (const ext of exts) {
-    const path = `file:///${homeDir}/.petdex-cc/pets/${slug}/spritesheet.${ext}`;
-    setSpriteImage(path);
+    const spritePath = `pet-sprite://${slug}/spritesheet.${ext}`;
+    setSpriteImage(spritePath);
     break;
   }
 }

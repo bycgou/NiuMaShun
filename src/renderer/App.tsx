@@ -93,7 +93,10 @@ export default function App() {
       setStocks(newStocks);
     });
     window.api.onUpdate('event:new', (event: EventRecord) => {
-      setEvents(prev => [event, ...prev].slice(0, 50));
+      setEvents(prev => {
+        if (prev.length > 0 && prev[0].id === event.id) return prev;
+        return [event, ...prev].slice(0, 50);
+      });
     });
   }, []);
 
